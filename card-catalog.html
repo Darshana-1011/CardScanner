@@ -11304,7 +11304,50 @@ document.getElementById('btn-save').addEventListener('click', async () => {
   await persist();
   renderEntries();
   closeReview();
+  syncToSharedSheet(entry);
 });
+
+// ---------- Shared team sheet sync ----------
+// Fire-and-forget: every saved entry also gets sent to a shared Google
+// Sheet (via an Apps Script Web App), so everyone's scans land in one
+// combined, live-updating list. If this fails (offline, blocked, etc.) the
+// entry is still safely saved locally either way — this never blocks that.
+const SHEET_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxDQOffJRl1lo2XUw-k4x66BSsBXjt9O6x-Ecvl_aYDsuCreDlhMThMx24pQlTKz0qk/exec';
+
+function getSavedByName() {
+  let name = localStorage.getItem('cardCatalogSavedByName');
+  if (!name) {
+    name = (prompt('Your name (shown next to entries you scan in the shared list):') || '').trim();
+    if (name) localStorage.setItem('cardCatalogSavedByName', name);
+  }
+  return name || 'Unknown';
+}
+
+async function syncToSharedSheet(entry) {
+  if (!SHEET_WEBHOOK_URL) return;
+  try {
+    await fetch(SHEET_WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        name: entry.name,
+        company: entry.company,
+        phone: entry.phone,
+        email: entry.email,
+        address: entry.address,
+        source: entry.kind === 'qr' ? 'QR' : entry.kind === 'manual' ? 'Manual' : 'Card',
+        date: entry.date,
+        notes: entry.notes,
+        rawScan: entry.rawScan || '',
+        savedBy: getSavedByName(),
+        photo: entry.image || ''
+      })
+    });
+  } catch (err) {
+    console.error('Could not sync to shared sheet:', err);
+  }
+}
 
 // ---------- Persistence ----------
 // Uses Claude's artifact storage API when available (window.storage), and
