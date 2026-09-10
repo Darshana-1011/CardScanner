@@ -11312,19 +11312,29 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 // Sheet (via an Apps Script Web App), so everyone's scans land in one
 // combined, live-updating list. If this fails (offline, blocked, etc.) the
 // entry is still safely saved locally either way — this never blocks that.
-const SHEET_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxDQOffJRl1lo2XUw-k4x66BSsBXjt9O6x-Ecvl_aYDsuCreDlhMThMx24pQlTKz0qk/exec';
+const SHEET_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxDQOffJRI1lo2XUw-k4x66BSsBXjt9O6x-EcvI_aYDsuCreDIhMThMx24pQlTKz0qk/exec';
 
 function getSavedByName() {
-  let name = localStorage.getItem('cardCatalogSavedByName');
-  if (!name) {
-    name = (prompt('Your name (shown next to entries you scan in the shared list):') || '').trim();
-    if (name) localStorage.setItem('cardCatalogSavedByName', name);
+  try {
+    let name = localStorage.getItem('cardCatalogSavedByName');
+    if (!name) {
+      name = (prompt('Your name (shown next to entries you scan in the shared list):') || '').trim();
+      if (name) localStorage.setItem('cardCatalogSavedByName', name);
+    }
+    return name || 'Unknown';
+  } catch (err) {
+    // Some mobile browsers (notably iOS Safari, in some contexts) can throw
+    // when prompt() is called outside a fresh, direct user gesture. Never
+    // let that block the actual save from reaching the shared sheet.
+    console.error('Could not get saved-by name:', err);
+    return 'Unknown';
   }
-  return name || 'Unknown';
 }
 
 async function syncToSharedSheet(entry) {
   if (!SHEET_WEBHOOK_URL) return;
+  var savedBy = 'Unknown';
+  try { savedBy = getSavedByName(); } catch (nameErr) { console.error('Name lookup failed:', nameErr); }
   try {
     await fetch(SHEET_WEBHOOK_URL, {
       method: 'POST',
@@ -11340,7 +11350,7 @@ async function syncToSharedSheet(entry) {
         date: entry.date,
         notes: entry.notes,
         rawScan: entry.rawScan || '',
-        savedBy: getSavedByName(),
+        savedBy: savedBy,
         photo: entry.image || ''
       })
     });
